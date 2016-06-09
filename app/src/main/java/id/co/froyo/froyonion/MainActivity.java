@@ -23,6 +23,9 @@ import android.os.Handler;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.util.Log;
+import android.view.View;
+import android.widget.AdapterView;
+import android.widget.ListView;
 import android.widget.Toast;
 
 import java.util.ArrayList;
@@ -30,7 +33,8 @@ import java.util.List;
 
 @TargetApi(Build.VERSION_CODES.LOLLIPOP)
 public class MainActivity extends AppCompatActivity {
-
+    private LeDeviceListAdapter mLeDeviceListAdapter;
+    private ListView listDevices;
     private BluetoothAdapter mBluetoothAdapter;
     private int REQUEST_ENABLE_BT = 1;
     private Handler mHandler;
@@ -39,11 +43,16 @@ public class MainActivity extends AppCompatActivity {
     private ScanSettings settings;
     private List<ScanFilter> filters;
     private BluetoothGatt mGatt;
+    private Context mContext;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
+        listDevices = (ListView) findViewById(R.id.list_devices);
+
+        mContext = this.getApplicationContext();
+
         mHandler = new Handler();
         if (!getPackageManager().hasSystemFeature(PackageManager.FEATURE_BLUETOOTH_LE)){
             Toast.makeText(this, "BLE Not Supported", Toast.LENGTH_SHORT).show();
@@ -51,6 +60,16 @@ public class MainActivity extends AppCompatActivity {
 
         final BluetoothManager bluetoothManager = (BluetoothManager) getSystemService(Context.BLUETOOTH_SERVICE);
         mBluetoothAdapter = bluetoothManager.getAdapter();
+
+        mLeDeviceListAdapter = new LeDeviceListAdapter(mContext);
+        listDevices.setAdapter(mLeDeviceListAdapter);
+        listDevices.setOnItemClickListener(new AdapterView.OnItemClickListener() {
+            @Override
+            public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
+                Toast.makeText(mContext, "Connecting to " + mLeDeviceListAdapter.getDevice(position).getAddress(), Toast.LENGTH_SHORT).show();
+                connectToDevice(mLeDeviceListAdapter.getDevice(position));
+            }
+        });
     }
 
     @Override
@@ -67,17 +86,19 @@ public class MainActivity extends AppCompatActivity {
             }
             scanLeDevice(true);
         }
+
+
     }
 
 
     @Override
     protected void onDestroy(){
+        super.onDestroy();
         if (mGatt == null) {
             return;
         }
         mGatt.close();
         mGatt = null;
-        super.onDestroy();
     }
 
     @Override
@@ -127,7 +148,9 @@ public class MainActivity extends AppCompatActivity {
             Log.i("callbackType", String.valueOf(callbackType));
             Log.i("result", result.toString());
             BluetoothDevice btDevice = result.getDevice();
-            connectToDevice(btDevice);
+            mLeDeviceListAdapter.addDevice(btDevice);
+            mLeDeviceListAdapter.notifyDataSetChanged();
+//            connectToDevice(btDevice);
         }
 
         @Override
@@ -150,7 +173,9 @@ public class MainActivity extends AppCompatActivity {
                 @Override
                 public void run() {
                     Log.i("onLeScan", device.toString());
-                    connectToDevice(device);
+                    mLeDeviceListAdapter.addDevice(device);
+                    mLeDeviceListAdapter.notifyDataSetChanged();
+//                    connectToDevice(device);
                 }
             });
         }
@@ -160,7 +185,12 @@ public class MainActivity extends AppCompatActivity {
     public void connectToDevice(BluetoothDevice device) {
         if (mGatt == null) {
             mGatt = device.connectGatt(this, false, gattCallback);
+            Log.i("Gatt Connected", mGatt.getDevice().getAddress());
             scanLeDevice(false);
+        } else {
+            mGatt.disconnect();
+            mGatt = device.connectGatt(this, false, gattCallback);
+            Log.i("New Connected", mGatt.getDevice().getAddress());
         }
     }
 
