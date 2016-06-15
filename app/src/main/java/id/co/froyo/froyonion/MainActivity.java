@@ -31,6 +31,8 @@ import android.widget.Toast;
 import java.util.ArrayList;
 import java.util.List;
 
+import id.co.froyo.froyonion.helper.LeDeviceListAdapter;
+
 @TargetApi(Build.VERSION_CODES.LOLLIPOP)
 public class MainActivity extends AppCompatActivity {
     private LeDeviceListAdapter mLeDeviceListAdapter;
@@ -66,7 +68,7 @@ public class MainActivity extends AppCompatActivity {
         listDevices.setOnItemClickListener(new AdapterView.OnItemClickListener() {
             @Override
             public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
-                Toast.makeText(mContext, "Connecting to " + mLeDeviceListAdapter.getDevice(position).getAddress(), Toast.LENGTH_SHORT).show();
+                Toast.makeText(mContext, "Connecting to " + mLeDeviceListAdapter.getDevice(position), Toast.LENGTH_SHORT).show();
                 connectToDevice(mLeDeviceListAdapter.getDevice(position));
             }
         });
@@ -146,11 +148,44 @@ public class MainActivity extends AppCompatActivity {
         @Override
         public void onScanResult(int callbackType, ScanResult result) {
             Log.i("callbackType", String.valueOf(callbackType));
-            Log.i("result", result.toString());
-            BluetoothDevice btDevice = result.getDevice();
-            mLeDeviceListAdapter.addDevice(btDevice);
-            mLeDeviceListAdapter.notifyDataSetChanged();
-//            connectToDevice(btDevice);
+            Log.i("result", String.valueOf(result.getScanRecord().getBytes()));
+//            BluetoothDevice btDevice = result.getDevice();
+//            mLeDeviceListAdapter.addDevice(btDevice);
+//            mLeDeviceListAdapter.notifyDataSetChanged();
+            int startByte = 2;
+            boolean patternFound = false;
+            byte[] scanRecord = result.getScanRecord().getBytes();
+            while (startByte <= 5) {
+                if (    ((int) scanRecord[startByte + 2] & 0xff) == 0x02 &&
+                        ((int) scanRecord[startByte + 3] & 0xff) == 0x15){
+                    patternFound = true;
+                    break;
+
+                }
+                startByte++;
+            }
+            if(patternFound) {
+//                convert to hex String
+                byte[] uuidBytes = new byte[16];
+                System.arraycopy(scanRecord, startByte+4, uuidBytes, 0, 16);
+                String hexString = bytesToHex(uuidBytes);
+
+//               UUID
+                String uuid =  hexString.substring(0,8) + "-" +
+                        hexString.substring(8,12) + "-" +
+                        hexString.substring(12,16) + "-" +
+                        hexString.substring(16,20) + "-" +
+                        hexString.substring(20,32);
+                //Here is your Major value
+                int major = (scanRecord[startByte+20] & 0xff) * 0x100 + (scanRecord[startByte+21] & 0xff);
+
+                //Here is your Minor value
+                int minor = (scanRecord[startByte+22] & 0xff) * 0x100 + (scanRecord[startByte+23] & 0xff);
+
+                Log.i("UUID", uuid);
+                Log.i("Major", String.valueOf(major));
+                Log.i("Minor", String.valueOf(minor));
+            }
         }
 
         @Override
@@ -169,17 +204,60 @@ public class MainActivity extends AppCompatActivity {
     private BluetoothAdapter.LeScanCallback mLeScanCallback = new BluetoothAdapter.LeScanCallback() {
         @Override
         public void onLeScan(final BluetoothDevice device, int rssi, byte[] scanRecord) {
-            runOnUiThread(new Runnable() {
-                @Override
-                public void run() {
-                    Log.i("onLeScan", device.toString());
-                    mLeDeviceListAdapter.addDevice(device);
-                    mLeDeviceListAdapter.notifyDataSetChanged();
-//                    connectToDevice(device);
+//            runOnUiThread(new Runnable() {
+//                @Override
+//                public void run() {
+//                    Log.i("onLeScan", device.toString());
+//                    mLeDeviceListAdapter.addDevice(device);
+//                    mLeDeviceListAdapter.notifyDataSetChanged();
+//                }
+//            });
+            int startByte = 2;
+            boolean patternFound = false;
+            while (startByte <= 5) {
+                if (    ((int) scanRecord[startByte + 2] & 0xff) == 0x02 &&
+                        ((int) scanRecord[startByte + 3] & 0xff) == 0x15){
+                    patternFound = true;
+                    break;
+
                 }
-            });
+                startByte++;
+            }
+            if(patternFound) {
+//                convert to hex String
+                byte[] uuidBytes = new byte[16];
+                System.arraycopy(scanRecord, startByte+4, uuidBytes, 0, 16);
+                String hexString = bytesToHex(uuidBytes);
+
+//               UUID
+                String uuid =  hexString.substring(0,8) + "-" +
+                        hexString.substring(8,12) + "-" +
+                        hexString.substring(12,16) + "-" +
+                        hexString.substring(16,20) + "-" +
+                        hexString.substring(20,32);
+                //Here is your Major value
+                int major = (scanRecord[startByte+20] & 0xff) * 0x100 + (scanRecord[startByte+21] & 0xff);
+
+                //Here is your Minor value
+                int minor = (scanRecord[startByte+22] & 0xff) * 0x100 + (scanRecord[startByte+23] & 0xff);
+
+                Log.i("UUID", uuid);
+                Log.i("Major", String.valueOf(major));
+                Log.i("Minor", String.valueOf(minor));
+            }
         }
     };
+
+    static final char[] hexArray = "0123456789ABCDEF".toCharArray();
+    private static String bytesToHex(byte[] bytes) {
+        char[] hexChars = new char[bytes.length * 2];
+        for (int j = 0; j < bytes.length; j++){
+            int v = bytes[j] & 0xFF;
+            hexChars[j * 2] = hexArray[v >>> 4];
+            hexChars[j * 2 + 1] = hexArray[v & 0x0F];
+        }
+        return new String(hexChars);
+    }
 
 
     public void connectToDevice(BluetoothDevice device) {

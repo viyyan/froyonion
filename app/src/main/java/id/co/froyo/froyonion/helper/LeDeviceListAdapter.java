@@ -1,8 +1,9 @@
-package id.co.froyo.froyonion;
+package id.co.froyo.froyonion.helper;
 
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
 import android.content.Context;
+import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -10,6 +11,8 @@ import android.widget.BaseAdapter;
 import android.widget.TextView;
 
 import java.util.ArrayList;
+
+import id.co.froyo.froyonion.R;
 
 /**
  * Created by Fian on 6/9/16.
@@ -33,6 +36,10 @@ public class LeDeviceListAdapter extends BaseAdapter {
 
     public BluetoothDevice getDevice(int pos) {
         return mLeDevices.get(pos);
+    }
+
+    public double getDistance(int rssi, int txPower) {
+        return Math.pow(10d, ((double) txPower - rssi) / (10 * 2));
     }
 
     public void clear(){
@@ -72,7 +79,9 @@ public class LeDeviceListAdapter extends BaseAdapter {
             viewHolder.deviceName.setText(deviceName);
         else
             viewHolder.deviceName.setText(R.string.unknown_device);
-            viewHolder.deviceAddress.setText(device.getAddress());
+        viewHolder.deviceAddress.setText(device.getAddress());
+
+//        getDistance(device.)
         return view;
     }
 
