@@ -26,12 +26,15 @@ import android.util.Log;
 import android.view.View;
 import android.widget.AdapterView;
 import android.widget.ListView;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 
 import id.co.froyo.froyonion.helper.LeDeviceListAdapter;
+import id.co.froyo.froyonion.helper.SessionManager;
 
 @TargetApi(Build.VERSION_CODES.LOLLIPOP)
 public class MainActivity extends AppCompatActivity {
@@ -46,15 +49,28 @@ public class MainActivity extends AppCompatActivity {
     private List<ScanFilter> filters;
     private BluetoothGatt mGatt;
     private Context mContext;
+    private SessionManager sessionManager;
+    private HashMap<String, String> userData;
+    private TextView name, timeCheck;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
+
         listDevices = (ListView) findViewById(R.id.list_devices);
+        name = (TextView) findViewById(R.id.mainName);
+        timeCheck = (TextView) findViewById(R.id.mainTime);
 
         mContext = this.getApplicationContext();
+        sessionManager = new SessionManager(mContext);
+        sessionManager.checkLogin();
 
+
+        userData = sessionManager.getUserData();
+        if(userData != null && userData.get(sessionManager.KEY_NAME) != null) {
+            name.setText(userData.get(sessionManager.KEY_NAME));
+        }
         mHandler = new Handler();
         if (!getPackageManager().hasSystemFeature(PackageManager.FEATURE_BLUETOOTH_LE)){
             Toast.makeText(this, "BLE Not Supported", Toast.LENGTH_SHORT).show();

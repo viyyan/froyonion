@@ -6,6 +6,8 @@ import android.content.SharedPreferences;
 
 import java.util.HashMap;
 
+import id.co.froyo.froyonion.LoginActivity;
+
 /**
  * Created by Fian on 6/13/16.
  */
@@ -20,7 +22,8 @@ public class SessionManager {
                     KEY_USERID = "userId",
                     KEY_NAME = "name",
                     KEY_EMAIL = "email",
-                    KEY_TOKEN = "loginToken";
+                    KEY_TOKEN = "loginToken",
+                    IS_CHECKIN = "isCheckin";
 
     public SessionManager(Context mContext) {
         this.context = mContext;
@@ -53,13 +56,22 @@ public class SessionManager {
         return user;
     }
 
+    /** If Not Login will be redirected */
+    public void checkLogin() {
+        if(!this.isLoggedIn()){
+            Intent i = new Intent(context, LoginActivity.class);
+            i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+            context.startActivity(i);
+        }
+    }
+
     /** Clear Session */
     public void clearSession(){
         editor.clear();
         editor.commit();
-//        Intent i = new Intent(context, FormSignupActivity.class);
-//        i.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
-//        context.startActivity(i);
+        Intent i = new Intent(context, LoginActivity.class);
+        i.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+        context.startActivity(i);
     }
 
 }
