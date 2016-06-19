@@ -23,16 +23,34 @@ import android.os.Handler;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.util.Log;
+import android.view.Menu;
+import android.view.MenuItem;
 import android.view.View;
 import android.widget.AdapterView;
+import android.widget.Button;
 import android.widget.ListView;
+import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
+
+import com.android.volley.AuthFailureError;
+import com.android.volley.NoConnectionError;
+import com.android.volley.Request;
+import com.android.volley.Response;
+import com.android.volley.ServerError;
+import com.android.volley.TimeoutError;
+import com.android.volley.VolleyError;
+
+import org.json.JSONException;
+import org.json.JSONObject;
 
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
+import id.co.froyo.froyonion.helper.AppController;
+import id.co.froyo.froyonion.helper.CustomRequest;
 import id.co.froyo.froyonion.helper.LeDeviceListAdapter;
 import id.co.froyo.froyonion.helper.SessionManager;
 
@@ -51,7 +69,13 @@ public class MainActivity extends AppCompatActivity {
     private Context mContext;
     private SessionManager sessionManager;
     private HashMap<String, String> userData;
-    private TextView name, timeCheck;
+    private TextView name, timeCheck, status;
+    private Button mainButton;
+    private ProgressBar progressBar;
+    private String UUID = "UUID", major = "major", minor = "minor", dist = "distance";
+    private String fixUUID = "CB10023F-A318-3394-4199-A8730C7C1AEC";
+    private String fixMajor = "3", fixMinor = "284";
+    private int range = 30; //meters
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -61,6 +85,11 @@ public class MainActivity extends AppCompatActivity {
         listDevices = (ListView) findViewById(R.id.list_devices);
         name = (TextView) findViewById(R.id.mainName);
         timeCheck = (TextView) findViewById(R.id.mainTime);
+        status = (TextView) findViewById(R.id.mainStatus);
+        status.setText("Kamu berada di luar area kantor");
+
+        progressBar = (ProgressBar) findViewById(R.id.progressBar);
+        mainButton = (Button) findViewById(R.id.mainButton);
 
         mContext = this.getApplicationContext();
         sessionManager = new SessionManager(mContext);
@@ -81,13 +110,33 @@ public class MainActivity extends AppCompatActivity {
 
         mLeDeviceListAdapter = new LeDeviceListAdapter(mContext);
         listDevices.setAdapter(mLeDeviceListAdapter);
-        listDevices.setOnItemClickListener(new AdapterView.OnItemClickListener() {
-            @Override
-            public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
-                Toast.makeText(mContext, "Connecting to " + mLeDeviceListAdapter.getDevice(position), Toast.LENGTH_SHORT).show();
-                connectToDevice(mLeDeviceListAdapter.getDevice(position));
-            }
-        });
+//        listDevices.setOnItemClickListener(new AdapterView.OnItemClickListener() {
+//            @Override
+//            public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
+//                Toast.makeText(mContext, "Connecting to " + mLeDeviceListAdapter.getDevice(position), Toast.LENGTH_SHORT).show();
+//                connectToDevice(mLeDeviceListAdapter.getDevice(position));
+//            }
+//        });
+    }
+
+    @Override
+    public boolean onCreateOptionsMenu(Menu menu) {
+        // Inflate the menu; this adds items to the action bar if it is present.
+        getMenuInflater().inflate(R.menu.main, menu);
+        return true;
+    }
+
+    @Override
+    public boolean onOptionsItemSelected(MenuItem item) {
+
+        int id = item.getItemId();
+        if (id == R.id.action_logout) {
+            sessionManager.clearSession();
+            return true;
+        } else if (id== R.id.action_refresh) {
+            scanLeDevice(true);
+        }
+        return super.onOptionsItemSelected(item);
     }
 
     @Override
@@ -134,10 +183,15 @@ public class MainActivity extends AppCompatActivity {
 
     private void scanLeDevice(final boolean enable) {
         if (enable) {
+            status.setText("Scanning...");
+            progressBar.setVisibility(View.VISIBLE);
+            mainButton.setVisibility(View.GONE);
+
             mHandler.postDelayed(new Runnable() {
 
                 @Override
                 public void run() {
+                    progressBar.setVisibility(View.GONE);
                     if (Build.VERSION.SDK_INT < 21) {
                         mBluetoothAdapter.stopLeScan(mLeScanCallback);
                     } else  {
@@ -165,43 +219,33 @@ public class MainActivity extends AppCompatActivity {
         public void onScanResult(int callbackType, ScanResult result) {
             Log.i("callbackType", String.valueOf(callbackType));
             Log.i("result", String.valueOf(result.getScanRecord().getBytes()));
-//            BluetoothDevice btDevice = result.getDevice();
-//            mLeDeviceListAdapter.addDevice(btDevice);
-//            mLeDeviceListAdapter.notifyDataSetChanged();
-            int startByte = 2;
-            boolean patternFound = false;
+
             byte[] scanRecord = result.getScanRecord().getBytes();
-            while (startByte <= 5) {
-                if (    ((int) scanRecord[startByte + 2] & 0xff) == 0x02 &&
-                        ((int) scanRecord[startByte + 3] & 0xff) == 0x15){
-                    patternFound = true;
-                    break;
+            int rssi = result.getRssi();
 
+            int powerTx = result.getScanRecord().getTxPowerLevel();
+            Log.i("scaned", getScanDevice(scanRecord, rssi, powerTx).toString());
+
+            double distance = calculateDistance(powerTx, rssi);
+            if(distance < range) {
+                Log.i("distanceOk", String.valueOf(distance));
+                status.setText("Kamu berada di area kantor");
+                mainButton.setVisibility(View.VISIBLE);
+                if(sessionManager.isCheckedIn()){
+                    mainButton.setText("Checkout");
+                    mainButton.setBackgroundColor(getResources().getColor(R.color.colorCheckout));
+                    mainButton.setOnClickListener(new OnChekoutClick());
+                } else {
+                    mainButton.setText("Checkin");
+                    mainButton.setBackgroundColor(getResources().getColor(R.color.colorCheckin));
+                    mainButton.setOnClickListener(new OnCheckinClick());
                 }
-                startByte++;
+            } else {
+                status.setText("Kamu berada di luar area kantor");
+                mainButton.setVisibility(View.GONE);
             }
-            if(patternFound) {
-//                convert to hex String
-                byte[] uuidBytes = new byte[16];
-                System.arraycopy(scanRecord, startByte+4, uuidBytes, 0, 16);
-                String hexString = bytesToHex(uuidBytes);
-
-//               UUID
-                String uuid =  hexString.substring(0,8) + "-" +
-                        hexString.substring(8,12) + "-" +
-                        hexString.substring(12,16) + "-" +
-                        hexString.substring(16,20) + "-" +
-                        hexString.substring(20,32);
-                //Here is your Major value
-                int major = (scanRecord[startByte+20] & 0xff) * 0x100 + (scanRecord[startByte+21] & 0xff);
-
-                //Here is your Minor value
-                int minor = (scanRecord[startByte+22] & 0xff) * 0x100 + (scanRecord[startByte+23] & 0xff);
-
-                Log.i("UUID", uuid);
-                Log.i("Major", String.valueOf(major));
-                Log.i("Minor", String.valueOf(minor));
-            }
+//            mLeDeviceListAdapter.addRecord(scanRecord);
+//            mLeDeviceListAdapter.notifyDataSetChanged();
         }
 
         @Override
@@ -219,61 +263,52 @@ public class MainActivity extends AppCompatActivity {
 
     private BluetoothAdapter.LeScanCallback mLeScanCallback = new BluetoothAdapter.LeScanCallback() {
         @Override
-        public void onLeScan(final BluetoothDevice device, int rssi, byte[] scanRecord) {
-//            runOnUiThread(new Runnable() {
-//                @Override
-//                public void run() {
-//                    Log.i("onLeScan", device.toString());
+        public void onLeScan(final BluetoothDevice device, int rssi, final byte[] scanRecord) {
+            runOnUiThread(new Runnable() {
+                @Override
+                public void run() {
+                    Log.i("onLeScan", device.toString());
+                    mLeDeviceListAdapter.addRecord(scanRecord);
+                    mLeDeviceListAdapter.notifyDataSetChanged();
 //                    mLeDeviceListAdapter.addDevice(device);
 //                    mLeDeviceListAdapter.notifyDataSetChanged();
-//                }
-//            });
-            int startByte = 2;
-            boolean patternFound = false;
-            while (startByte <= 5) {
-                if (    ((int) scanRecord[startByte + 2] & 0xff) == 0x02 &&
-                        ((int) scanRecord[startByte + 3] & 0xff) == 0x15){
-                    patternFound = true;
-                    break;
-
                 }
-                startByte++;
-            }
-            if(patternFound) {
-//                convert to hex String
-                byte[] uuidBytes = new byte[16];
-                System.arraycopy(scanRecord, startByte+4, uuidBytes, 0, 16);
-                String hexString = bytesToHex(uuidBytes);
-
-//               UUID
-                String uuid =  hexString.substring(0,8) + "-" +
-                        hexString.substring(8,12) + "-" +
-                        hexString.substring(12,16) + "-" +
-                        hexString.substring(16,20) + "-" +
-                        hexString.substring(20,32);
-                //Here is your Major value
-                int major = (scanRecord[startByte+20] & 0xff) * 0x100 + (scanRecord[startByte+21] & 0xff);
-
-                //Here is your Minor value
-                int minor = (scanRecord[startByte+22] & 0xff) * 0x100 + (scanRecord[startByte+23] & 0xff);
-
-                Log.i("UUID", uuid);
-                Log.i("Major", String.valueOf(major));
-                Log.i("Minor", String.valueOf(minor));
-            }
+            });
+//            int startByte = 2;
+//            boolean patternFound = false;
+//            while (startByte <= 5) {
+//                if (    ((int) scanRecord[startByte + 2] & 0xff) == 0x02 &&
+//                        ((int) scanRecord[startByte + 3] & 0xff) == 0x15){
+//                    patternFound = true;
+//                    break;
+//
+//                }
+//                startByte++;
+//            }
+//            if(patternFound) {
+////                convert to hex String
+//                byte[] uuidBytes = new byte[16];
+//                System.arraycopy(scanRecord, startByte+4, uuidBytes, 0, 16);
+//                String hexString = bytesToHex(uuidBytes);
+//
+////               UUID
+//                String uuid =  hexString.substring(0,8) + "-" +
+//                        hexString.substring(8,12) + "-" +
+//                        hexString.substring(12,16) + "-" +
+//                        hexString.substring(16,20) + "-" +
+//                        hexString.substring(20,32);
+//                //Here is your Major value
+//                int major = (scanRecord[startByte+20] & 0xff) * 0x100 + (scanRecord[startByte+21] & 0xff);
+//
+//                //Here is your Minor value
+//                int minor = (scanRecord[startByte+22] & 0xff) * 0x100 + (scanRecord[startByte+23] & 0xff);
+//
+//                Log.i("UUID", uuid);
+//                Log.i("Major", String.valueOf(major));
+//                Log.i("Minor", String.valueOf(minor));
+//            }
         }
     };
-
-    static final char[] hexArray = "0123456789ABCDEF".toCharArray();
-    private static String bytesToHex(byte[] bytes) {
-        char[] hexChars = new char[bytes.length * 2];
-        for (int j = 0; j < bytes.length; j++){
-            int v = bytes[j] & 0xFF;
-            hexChars[j * 2] = hexArray[v >>> 4];
-            hexChars[j * 2 + 1] = hexArray[v & 0x0F];
-        }
-        return new String(hexChars);
-    }
 
 
     public void connectToDevice(BluetoothDevice device) {
@@ -319,4 +354,149 @@ public class MainActivity extends AppCompatActivity {
         }
     };
 
+    public HashMap<String, String> getScanDevice(byte[] scanRecord, int rssi, int txPower) {
+        int startByte = 2;
+        boolean patternFound = false;
+        double distance = calculateDistance(txPower, rssi);
+
+        HashMap<String, String> device = new HashMap<>();
+        while (startByte <= 5) {
+            if (((int) scanRecord[startByte + 2] & 0xff) == 0x02 &&
+                    ((int) scanRecord[startByte + 3] & 0xff) == 0x15) {
+                patternFound = true;
+                break;
+
+            }
+            startByte++;
+        }
+        if (patternFound) {
+//                convert to hex String
+            byte[] uuidBytes = new byte[16];
+            System.arraycopy(scanRecord, startByte + 4, uuidBytes, 0, 16);
+            String hexString = bytesToHex(uuidBytes);
+
+//               UUID
+            String uuid = hexString.substring(0, 8) + "-" +
+                    hexString.substring(8, 12) + "-" +
+                    hexString.substring(12, 16) + "-" +
+                    hexString.substring(16, 20) + "-" +
+                    hexString.substring(20, 32);
+            //Here is your Major value
+            int majorIn = (scanRecord[startByte + 20] & 0xff) * 0x100 + (scanRecord[startByte + 21] & 0xff);
+
+            //Here is your Minor value
+            int minorIn = (scanRecord[startByte + 22] & 0xff) * 0x100 + (scanRecord[startByte + 23] & 0xff);
+
+
+            device.put(UUID, uuid);
+            device.put(major, String.valueOf(majorIn));
+            device.put(minor, String.valueOf(minorIn));
+            device.put(dist, String.valueOf(distance));
+
+        }
+        return device;
+    }
+
+    static final char[] hexArray = "0123456789ABCDEF".toCharArray();
+    private static String bytesToHex(byte[] bytes) {
+        char[] hexChars = new char[bytes.length * 2];
+        for (int j = 0; j < bytes.length; j++){
+            int v = bytes[j] & 0xFF;
+            hexChars[j * 2] = hexArray[v >>> 4];
+            hexChars[j * 2 + 1] = hexArray[v & 0x0F];
+        }
+        return new String(hexChars);
+    }
+
+//    measure distance
+    protected static double calculateDistance(int txPower, double rssi) {
+        if (rssi == 0) {
+            return -1.0; // if we cannot determine distance, return -1.
+        }
+
+        double ratio = rssi*1.0/txPower;
+        if (ratio < 1.0) {
+            return Math.pow(ratio,10);
+        }
+        else {
+            double accuracy =  (0.89976)*Math.pow(ratio,7.7095) + 0.111;
+            return accuracy;
+        }
+    }
+
+    private class OnCheckinClick implements View.OnClickListener {
+        @Override
+        public void onClick(View v) {
+            final String authToken  = userData.get(sessionManager.KEY_TOKEN);
+            Log.i("token", authToken);
+            String url = "https://api.froyonion.com/event/checkin";
+            String tag = "json_checkin_obj_req";
+            CustomRequest jsonObjectRequest = new CustomRequest(Request.Method.POST, url, null,
+                    new Response.Listener<JSONObject>() {
+                        @Override
+                        public void onResponse(JSONObject response) {
+                                Log.i("response", response.toString());
+                        }
+                    }, new Response.ErrorListener() {
+                @Override
+                public void onErrorResponse(VolleyError error) {
+                    if(error instanceof TimeoutError || error instanceof NoConnectionError) {
+                        Toast.makeText(mContext, "Poor Network", Toast.LENGTH_SHORT).show();
+                    } else if (error instanceof AuthFailureError) {
+                        Toast.makeText(mContext, "Auth Token Expired", Toast.LENGTH_SHORT).show();
+                    } else if (error instanceof ServerError) {
+                        Toast.makeText(mContext, "Kesalahan Server", Toast.LENGTH_SHORT).show();
+                    }
+                }
+            }){
+                @Override
+                public Map<String, String> getHeaders() throws AuthFailureError {
+                    HashMap<String, String> headers = new HashMap<String, String>();
+                    headers.put("Content-Type", "application/json");
+                    headers.put("Authorization", authToken);
+                    return headers;
+                }
+
+            };
+            AppController.getInstance().addToRequestQueue(jsonObjectRequest, tag);
+        }
+    }
+
+    private class OnChekoutClick implements View.OnClickListener {
+        @Override
+        public void onClick(View v) {
+            final String authToken  = userData.get(sessionManager.KEY_TOKEN);
+            Log.i("token", authToken);
+            String url = "https://api.froyonion.com/event/checkout";
+            String tag = "json_checkout_obj_req";
+            CustomRequest jsonObjectRequest = new CustomRequest(Request.Method.POST, url, null,
+                    new Response.Listener<JSONObject>() {
+                        @Override
+                        public void onResponse(JSONObject response) {
+                            Log.i("response", response.toString());
+                        }
+                    }, new Response.ErrorListener() {
+                @Override
+                public void onErrorResponse(VolleyError error) {
+                    if(error instanceof TimeoutError || error instanceof NoConnectionError) {
+                        Toast.makeText(mContext, "Poor Network", Toast.LENGTH_SHORT).show();
+                    } else if (error instanceof AuthFailureError) {
+                        Toast.makeText(mContext, "Auth Token Expired", Toast.LENGTH_SHORT).show();
+                    } else if (error instanceof ServerError) {
+                        Toast.makeText(mContext, "Kesalahan Server", Toast.LENGTH_SHORT).show();
+                    }
+                }
+            }){
+                @Override
+                public Map<String, String> getHeaders() throws AuthFailureError {
+                    HashMap<String, String> headers = new HashMap<String, String>();
+                    headers.put("Content-Type", "application/json");
+                    headers.put("Authorization", authToken);
+                    return headers;
+                }
+
+            };
+            AppController.getInstance().addToRequestQueue(jsonObjectRequest, tag);
+        }
+    }
 }

@@ -103,7 +103,7 @@ public class LoginActivity extends AppCompatActivity {
                                 } else if (error instanceof AuthFailureError) {
                                     Toast.makeText(mContext, "Email atau Password salah", Toast.LENGTH_SHORT).show();
                                 } else if (error instanceof ServerError) {
-                                    Toast.makeText(mContext, "Server Error", Toast.LENGTH_SHORT).show();
+                                    Toast.makeText(mContext, "Email atau Password salah", Toast.LENGTH_SHORT).show();
                                 }
                             }
                         }){

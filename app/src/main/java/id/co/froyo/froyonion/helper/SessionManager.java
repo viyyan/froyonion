@@ -4,6 +4,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
 
+import java.util.Date;
 import java.util.HashMap;
 
 import id.co.froyo.froyonion.LoginActivity;
@@ -23,7 +24,8 @@ public class SessionManager {
                     KEY_NAME = "name",
                     KEY_EMAIL = "email",
                     KEY_TOKEN = "loginToken",
-                    IS_CHECKIN = "isCheckin";
+                    IS_CHECKIN = "isCheckin",
+                    KEY_TIME = "time";
 
     public SessionManager(Context mContext) {
         this.context = mContext;
@@ -74,4 +76,13 @@ public class SessionManager {
         context.startActivity(i);
     }
 
+    public void checkedIn(String time){
+        editor.putBoolean(IS_CHECKIN, true);
+        editor.putString(KEY_TIME, time);
+        editor.commit();
+    }
+
+    public boolean isCheckedIn() {
+        return pref.getBoolean(IS_CHECKIN, false);
+    }
 }
