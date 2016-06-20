@@ -3,9 +3,17 @@ package id.co.froyo.froyonion.helper;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.util.Log;
 
+import java.sql.Timestamp;
+import java.text.DateFormat;
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
+import java.util.Calendar;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.Locale;
+import java.util.TimeZone;
 
 import id.co.froyo.froyonion.LoginActivity;
 
@@ -83,6 +91,73 @@ public class SessionManager {
     }
 
     public boolean isCheckedIn() {
+        String str_date =  pref.getString(KEY_TIME, null);
+        Date currentDate = new Date();
+        Calendar c = Calendar.getInstance();
+        if(str_date != null) {
+
+            SimpleDateFormat inputFormat = new SimpleDateFormat(
+                    "yyyy-MM-dd HH:mm:ss");
+            inputFormat.setTimeZone(TimeZone.getTimeZone("Etc/UTC"));
+
+
+            Date dateCheck = null;
+            try {
+                dateCheck = inputFormat.parse(str_date);
+            } catch (ParseException e) {
+                e.printStackTrace();
+            }
+
+
+            c.setTime(dateCheck);
+            int year = c.get(Calendar.YEAR), month = c.get(Calendar.MONTH), day = c.get(Calendar.DAY_OF_MONTH);
+            String limitDate = year + "-" + (month + 1) + "-" + day + " 22:00:00";//UTC
+            Date limitTime = null;
+            try {
+                limitTime = inputFormat.parse(limitDate);
+            } catch (ParseException e) {
+                e.printStackTrace();
+            }
+
+            Log.i("difference", currentDate.toString() + " - " + limitTime.toString());
+            if (pref.getBoolean(IS_CHECKIN, false) && (currentDate.getTime() > limitTime.getTime())) {
+                editor.putBoolean(IS_CHECKIN, false);
+                editor.putString(KEY_TIME, null);
+                editor.commit();
+            }
+        }
         return pref.getBoolean(IS_CHECKIN, false);
+    }
+
+    public void checkedOut(String createdAt) {
+        editor.putBoolean(IS_CHECKIN, false);
+        editor.putString(KEY_TIME, createdAt);
+        editor.commit();
+    }
+
+    public String getTimeChecked() {
+        String str_date =  pref.getString(KEY_TIME, null);
+        String timestamp;
+        if(str_date != null) {
+
+            SimpleDateFormat inputFormat = new SimpleDateFormat(
+                    "yyyy-MM-dd HH:mm:ss");
+            inputFormat.setTimeZone(TimeZone.getTimeZone("Etc/UTC"));
+
+            SimpleDateFormat outputFormat = new SimpleDateFormat("HH:mm:ss");
+// Adjust locale and zone appropriately
+
+            Date dateCheck = null;
+            try {
+                dateCheck = inputFormat.parse(str_date);
+            } catch (ParseException e) {
+                e.printStackTrace();
+            }
+
+            timestamp = outputFormat.format(dateCheck);
+        } else {
+            timestamp = "00:00:00";
+        }
+        return timestamp;
     }
 }

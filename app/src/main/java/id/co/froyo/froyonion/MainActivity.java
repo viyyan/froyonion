@@ -20,6 +20,7 @@ import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.os.Build;
 import android.os.Handler;
+import android.support.v4.content.ContextCompat;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.util.Log;
@@ -30,6 +31,7 @@ import android.widget.AdapterView;
 import android.widget.Button;
 import android.widget.ListView;
 import android.widget.ProgressBar;
+import android.widget.TextClock;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -69,13 +71,14 @@ public class MainActivity extends AppCompatActivity {
     private Context mContext;
     private SessionManager sessionManager;
     private HashMap<String, String> userData;
-    private TextView name, timeCheck, status;
+    private TextView name, timeCheck, status, lastCheck;
     private Button mainButton;
     private ProgressBar progressBar;
     private String UUID = "UUID", major = "major", minor = "minor", dist = "distance";
     private String fixUUID = "CB10023F-A318-3394-4199-A8730C7C1AEC";
     private String fixMajor = "3", fixMinor = "284";
     private int range = 30; //meters
+    private TextClock textClock;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -86,6 +89,11 @@ public class MainActivity extends AppCompatActivity {
         name = (TextView) findViewById(R.id.mainName);
         timeCheck = (TextView) findViewById(R.id.mainTime);
         status = (TextView) findViewById(R.id.mainStatus);
+        lastCheck = (TextView) findViewById(R.id.lastCheck);
+        lastCheck.setText("Click Checkin Button");
+
+        textClock = (TextClock) findViewById(R.id.textCLock);
+
         status.setText("Kamu berada di luar area kantor");
 
         progressBar = (ProgressBar) findViewById(R.id.progressBar);
@@ -108,6 +116,8 @@ public class MainActivity extends AppCompatActivity {
         final BluetoothManager bluetoothManager = (BluetoothManager) getSystemService(Context.BLUETOOTH_SERVICE);
         mBluetoothAdapter = bluetoothManager.getAdapter();
 
+
+
         mLeDeviceListAdapter = new LeDeviceListAdapter(mContext);
         listDevices.setAdapter(mLeDeviceListAdapter);
 //        listDevices.setOnItemClickListener(new AdapterView.OnItemClickListener() {
@@ -117,6 +127,7 @@ public class MainActivity extends AppCompatActivity {
 //                connectToDevice(mLeDeviceListAdapter.getDevice(position));
 //            }
 //        });
+
     }
 
     @Override
@@ -155,6 +166,21 @@ public class MainActivity extends AppCompatActivity {
         }
 
 
+        if(sessionManager.isCheckedIn()){
+            mainButton.setText("Checkout");
+            mainButton.setBackgroundColor(ContextCompat.getColor(mContext,R.color.colorCheckout));
+            mainButton.setOnClickListener(new OnChekoutClick());
+            timeCheck.setText(sessionManager.getTimeChecked());
+            lastCheck.setText("Checked in at:");
+        } else {
+            mainButton.setText("Checkin");
+            mainButton.setBackgroundColor(ContextCompat.getColor(mContext,R.color.colorCheckin));
+            mainButton.setOnClickListener(new OnCheckinClick());
+            timeCheck.setText(sessionManager.getTimeChecked());
+            lastCheck.setText("Checked out at:");
+        }
+
+
     }
 
 
@@ -166,6 +192,7 @@ public class MainActivity extends AppCompatActivity {
         }
         mGatt.close();
         mGatt = null;
+        scanLeDevice(false);
     }
 
     @Override
@@ -217,32 +244,24 @@ public class MainActivity extends AppCompatActivity {
     private ScanCallback mScanCallback = new ScanCallback() {
         @Override
         public void onScanResult(int callbackType, ScanResult result) {
-            Log.i("callbackType", String.valueOf(callbackType));
-            Log.i("result", String.valueOf(result.getScanRecord().getBytes()));
-
             byte[] scanRecord = result.getScanRecord().getBytes();
             int rssi = result.getRssi();
 
             int powerTx = result.getScanRecord().getTxPowerLevel();
-            Log.i("scaned", getScanDevice(scanRecord, rssi, powerTx).toString());
-
+            HashMap<String, String> devices = getScanDevice(scanRecord, rssi, powerTx);
             double distance = calculateDistance(powerTx, rssi);
-            if(distance < range) {
-                Log.i("distanceOk", String.valueOf(distance));
-                status.setText("Kamu berada di area kantor");
-                mainButton.setVisibility(View.VISIBLE);
-                if(sessionManager.isCheckedIn()){
-                    mainButton.setText("Checkout");
-                    mainButton.setBackgroundColor(getResources().getColor(R.color.colorCheckout));
-                    mainButton.setOnClickListener(new OnChekoutClick());
-                } else {
-                    mainButton.setText("Checkin");
-                    mainButton.setBackgroundColor(getResources().getColor(R.color.colorCheckin));
-                    mainButton.setOnClickListener(new OnCheckinClick());
+            if(devices.get(UUID) != null) {
+                if (devices.get(UUID).equals(fixUUID) && devices.get(major).equals(fixMajor) && devices.get(minor).equals(fixMinor)) {
+                    if (distance < range) {
+                        Log.i("distanceOk", String.valueOf(distance));
+                        status.setText("Kamu berada di area kantor");
+                        mainButton.setVisibility(View.VISIBLE);
+
+                    } else {
+                        status.setText("Kamu berada di luar area kantor");
+                        mainButton.setVisibility(View.GONE);
+                    }
                 }
-            } else {
-                status.setText("Kamu berada di luar area kantor");
-                mainButton.setVisibility(View.GONE);
             }
 //            mLeDeviceListAdapter.addRecord(scanRecord);
 //            mLeDeviceListAdapter.notifyDataSetChanged();
@@ -268,45 +287,14 @@ public class MainActivity extends AppCompatActivity {
                 @Override
                 public void run() {
                     Log.i("onLeScan", device.toString());
-                    mLeDeviceListAdapter.addRecord(scanRecord);
-                    mLeDeviceListAdapter.notifyDataSetChanged();
+
+//                    mLeDeviceListAdapter.addRecord(scanRecord);
+//                    mLeDeviceListAdapter.notifyDataSetChanged();
 //                    mLeDeviceListAdapter.addDevice(device);
 //                    mLeDeviceListAdapter.notifyDataSetChanged();
                 }
             });
-//            int startByte = 2;
-//            boolean patternFound = false;
-//            while (startByte <= 5) {
-//                if (    ((int) scanRecord[startByte + 2] & 0xff) == 0x02 &&
-//                        ((int) scanRecord[startByte + 3] & 0xff) == 0x15){
-//                    patternFound = true;
-//                    break;
-//
-//                }
-//                startByte++;
-//            }
-//            if(patternFound) {
-////                convert to hex String
-//                byte[] uuidBytes = new byte[16];
-//                System.arraycopy(scanRecord, startByte+4, uuidBytes, 0, 16);
-//                String hexString = bytesToHex(uuidBytes);
-//
-////               UUID
-//                String uuid =  hexString.substring(0,8) + "-" +
-//                        hexString.substring(8,12) + "-" +
-//                        hexString.substring(12,16) + "-" +
-//                        hexString.substring(16,20) + "-" +
-//                        hexString.substring(20,32);
-//                //Here is your Major value
-//                int major = (scanRecord[startByte+20] & 0xff) * 0x100 + (scanRecord[startByte+21] & 0xff);
-//
-//                //Here is your Minor value
-//                int minor = (scanRecord[startByte+22] & 0xff) * 0x100 + (scanRecord[startByte+23] & 0xff);
-//
-//                Log.i("UUID", uuid);
-//                Log.i("Major", String.valueOf(major));
-//                Log.i("Minor", String.valueOf(minor));
-//            }
+
         }
     };
 
@@ -435,7 +423,16 @@ public class MainActivity extends AppCompatActivity {
                     new Response.Listener<JSONObject>() {
                         @Override
                         public void onResponse(JSONObject response) {
-                                Log.i("response", response.toString());
+                            if(response.has("data")){
+                                try {
+                                    JSONObject data = response.getJSONObject("data");
+                                    Log.i("data", data.toString());
+                                    sessionManager.checkedIn(data.getString("createdAt"));
+                                    onResume();
+                                } catch (JSONException e) {
+                                    e.printStackTrace();
+                                }
+                            }
                         }
                     }, new Response.ErrorListener() {
                 @Override
@@ -453,7 +450,7 @@ public class MainActivity extends AppCompatActivity {
                 public Map<String, String> getHeaders() throws AuthFailureError {
                     HashMap<String, String> headers = new HashMap<String, String>();
                     headers.put("Content-Type", "application/json");
-                    headers.put("Authorization", authToken);
+                    headers.put("Authorization", "Bearer "+authToken);
                     return headers;
                 }
 
@@ -473,7 +470,16 @@ public class MainActivity extends AppCompatActivity {
                     new Response.Listener<JSONObject>() {
                         @Override
                         public void onResponse(JSONObject response) {
-                            Log.i("response", response.toString());
+                            if(response.has("data")){
+                                try {
+                                    JSONObject data = response.getJSONObject("data");
+                                    Log.i("data", data.toString());
+                                    sessionManager.checkedOut(data.getString("createdAt"));
+                                    onResume();
+                                } catch (JSONException e) {
+                                    e.printStackTrace();
+                                }
+                            }
                         }
                     }, new Response.ErrorListener() {
                 @Override
@@ -490,8 +496,8 @@ public class MainActivity extends AppCompatActivity {
                 @Override
                 public Map<String, String> getHeaders() throws AuthFailureError {
                     HashMap<String, String> headers = new HashMap<String, String>();
-                    headers.put("Content-Type", "application/json");
-                    headers.put("Authorization", authToken);
+//                    headers.put("Content-Type", "application/json");
+                    headers.put("Authorization", "Bearer "+authToken);
                     return headers;
                 }
 

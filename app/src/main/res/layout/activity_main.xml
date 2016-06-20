@@ -3,24 +3,45 @@
     android:layout_height="wrap_content"
     android:layout_width="match_parent"
     android:gravity="center">
+    <TextClock
+        android:id="@+id/textCLock"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:timeZone="GMT+0700"
+        android:format24Hour="MMM dd, yyyy k:mm"
+        android:format12Hour="MMM dd, yyyy k:mm"
+        android:padding="8dp"
+        android:gravity="center"
+        />
     <TextView
         android:id="@+id/mainName"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:text="TEST"
         android:gravity="center"
+        android:padding="8dp"
+        android:layout_below="@+id/textCLock"/>
+    <TextView
+        android:id="@+id/lastCheck"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Checked in at"
+        android:layout_below="@+id/mainName"
+        android:gravity="center"
         android:padding="8dp"/>
+
     <TextView
         android:id="@+id/mainTime"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="08:59"
+        android:text="00:00:00"
         android:textSize="24dp"
         android:padding="8dp"
         android:fontFamily="monospace"
         android:textColor="@color/colorAccent"
         android:gravity="center"
-        android:layout_below="@+id/mainName"/>
+        android:layout_below="@+id/lastCheck"/>
+
     <TextView
         android:id="@+id/mainStatus"
         android:layout_width="match_parent"
@@ -47,6 +68,7 @@
         android:background="@color/colorAccent"
         android:layout_below="@+id/mainStatus"
         android:visibility="gone"/>
+
     <ListView
         android:id="@+id/list_devices"
         android:layout_width="match_parent"
